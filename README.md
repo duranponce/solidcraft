@@ -1,3 +1,8 @@
+> [!WARNING]
+> **Este repositório foi supersedido por [`duranponce/modelagem-3d`](https://github.com/duranponce/modelagem-3d).**
+> O studio Hostgator (SolidCraft + Orca Slicer Web num único Docker) vive lá.
+> Este fork do CAD Rust pode ser arquivado/excluído; o WASM de produção vem de `ghcr.io/tangency-labs/solidcraft-web`.
+
 <p align="center">
   <img src="assets/icons/app/linux/exports/hicolor/256x256/apps/io.tangencylabs.solidcraft.png" width="96" height="96" alt="SolidCraft" />
 </p>
