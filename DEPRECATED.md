@@ -1,8 +1,11 @@
-# Deprecated
+# Deprecated — moved to modelagem-3d
 
-Moved to **https://github.com/duranponce/modelagem-3d**.
+**Canonical product:** https://github.com/duranponce/modelagem-3d  
 
-Production image: `ghcr.io/duranponce/modelagem-3d`  
-URL: https://modelagem-3d.duranponce.com.br/
+**Production:** https://modelagem-3d.duranponce.com.br/  
+**Image:** `ghcr.io/duranponce/company/modelagem-3d` (one Docker: SolidCraft WASM + Orca Slicer Web)
 
-This repository (SolidCraft Rust fork) is no longer required for Duran Ponce Hostgator deploy and may be deleted.
+This Rust CAD fork is **not** used for Hostgator. Browser CAD comes from `ghcr.io/tangency-labs/solidcraft-web`.  
+**File → Send to Slicer** opens Orca Slicer Web in the same container (no official Orca web UI exists; AGPL desktop is not embedded).
+
+This repository may be archived or deleted.
