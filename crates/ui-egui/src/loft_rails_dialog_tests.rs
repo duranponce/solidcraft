@@ -279,3 +279,111 @@ fn an_unchanged_loft_edit_keeps_a_section_of_all_profiles() {
     ok(&mut h);
     assert_eq!(sections(&h), stored);
 }
+
+/// Surface Loft accepts body edge chains as sections (#11838): picking a body edge and a sketch
+/// curve produces valid sections parameters, and editing the feature round-trips correctly.
+#[test]
+fn surface_loft_with_body_edges_and_sketch_sections() {
+    let mut h = Harness::new();
+    // Create two surface bodies with edges to pick
+    h.app.run("sketch.create", json!({"plane": {"origin": [0, 0, 0], "x_dir": [1, 0, 0], "y_dir": [0, 1, 0]}, "name": "LowSketch"})).unwrap();
+    h.app.run("sketch.rectangle.two_point", json!({"p0": [10, 10], "p1": [30, 30]})).unwrap();
+    h.app.run("sketch.finish", json!({})).unwrap();
+    h.app.run("surface.extrude", json!({"sketch": "LowSketch", "distance": "10 mm", "body_name": "Low"})).unwrap();
+
+    h.app.run("sketch.create", json!({"plane": {"origin": [0, 0, 40], "x_dir": [1, 0, 0], "y_dir": [0, 1, 0]}, "name": "MidSketch"})).unwrap();
+    h.app.run("sketch.line", json!({"points": [[15, 15], [25, 25]], "ids": ["m"]})).unwrap();
+    h.app.run("sketch.finish", json!({})).unwrap();
+    let mid = h.app.session.doc.find_feature("MidSketch").unwrap().id;
+
+    h.app.run("sketch.create", json!({"plane": {"origin": [0, 0, 60], "x_dir": [1, 0, 0], "y_dir": [0, 1, 0]}, "name": "HighSketch"})).unwrap();
+    h.app.run("sketch.rectangle.two_point", json!({"p0": [10, 10], "p1": [30, 30]})).unwrap();
+    h.app.run("sketch.finish", json!({})).unwrap();
+    h.app.run("surface.extrude", json!({"sketch": "HighSketch", "distance": "10 mm", "body_name": "High"})).unwrap();
+
+    // Pick edges from Low and High bodies, and a curve from Mid sketch
+    let st = h.app.session.world_state().unwrap();
+    let low_body = st.body("Low").unwrap();
+    let low_mesh = low_body.mesh();
+    let low_edge = low_mesh.edges.iter().find(|e| e.iter().any(|p| (p.z - 10.0).abs() < 1e-6)).unwrap();
+    let low_edge_idx = low_mesh.edges.iter().position(|e| std::ptr::eq(e, low_edge)).unwrap();
+    let low_edge_point = (low_edge[0] + low_edge[1]) * 0.5;
+
+    let high_body = st.body("High").unwrap();
+    let high_mesh = high_body.mesh();
+    let high_edge = high_mesh.edges.iter().find(|e| e.iter().any(|p| (p.z - 60.0).abs() < 1e-6)).unwrap();
+    let high_edge_idx = high_mesh.edges.iter().position(|e| std::ptr::eq(e, high_edge)).unwrap();
+    let high_edge_point = high_edge[high_edge.len() / 2];
+
+    h.step(&json!({"call":"ui.start","params":{"command":"surface.loft"}})).unwrap();
+    h.frames(3);
+    let d = h.app.dialog.as_mut().unwrap();
+    d.inputs[0].items = vec![
+        Sel::Edge { body: "Low".into(), index: low_edge_idx, point: low_edge_point },
+        Sel::SketchCurve { id: "m".into(), sketch: Some(mid) },
+        Sel::Edge { body: "High".into(), index: high_edge_idx, point: high_edge_point },
+    ];
+
+    let commands = crate::dialogs::apply_commands(&h.app, h.app.dialog.as_ref().unwrap()).unwrap();
+    let sections = &commands[0].1["sections"];
+    assert_eq!(sections.as_array().unwrap().len(), 3, "should have 3 sections");
+    assert!(!sections[0]["body"].is_null(), "first section should be body edge");
+    assert!(!sections[1]["sketch"].is_null(), "second section should be sketch curve");
+    assert!(!sections[2]["body"].is_null(), "third section should be body edge");
+
+    ok(&mut h);
+    let name = h.app.session.doc.features.last().unwrap().name.clone();
+
+    // Edit and verify round-trip
+    h.step(&json!({"call":"ui.editFeature","params":{"feature":name}})).unwrap();
+    h.frames(8);
+    let d = h.app.dialog.as_ref().unwrap();
+    assert_eq!(d.inputs[0].items.len(), 3, "should have 3 picks after edit");
+    assert!(d.inputs[0].items.iter().any(|x| matches!(x, Sel::Edge { body, .. } if body == "Low")), "should have Low edge");
+    assert!(d.inputs[0].items.iter().any(|x| matches!(x, Sel::SketchCurve { id, .. } if id == "m")), "should have mid curve");
+    assert!(d.inputs[0].items.iter().any(|x| matches!(x, Sel::Edge { body, .. } if body == "High")), "should have High edge");
+
+    ok(&mut h);
+}
+
+#[test]
+fn a_loft_to_a_point_keeps_the_point_section_when_reopened_for_editing() {
+    let mut h = Harness::new();
+    h.app.run("sketch.create", json!({"name": "Base", "plane": {"origin": [0, 0, 0], "x_dir": [1, 0, 0], "y_dir": [0, 1, 0]}})).unwrap();
+    h.app.run("sketch.circle.center", json!({"center": [0, 0], "radius": 10})).unwrap();
+    h.app.run("sketch.finish", json!({})).unwrap();
+
+    h.app.run("sketch.create", json!({"name": "Apex", "plane": {"origin": [0, 0, 30], "x_dir": [1, 0, 0], "y_dir": [0, 1, 0]}})).unwrap();
+    h.app.run("sketch.point", json!({"point": [0, 0], "id": "p1"})).unwrap();
+    h.app.run("sketch.finish", json!({})).unwrap();
+
+    let id = |h: &Harness, n: &str| h.app.session.doc.find_feature(n).unwrap().id;
+    let base = id(&h, "Base");
+    let apex = id(&h, "Apex");
+
+    h.step(&json!({"call": "ui.start", "params": {"command": "solid.loft"}})).unwrap();
+    h.frames(3);
+    let d = h.app.dialog.as_mut().unwrap();
+    d.inputs[0].items = vec![Sel::Profile { sketch: base, index: 0 }, Sel::SketchPoint { id: format!("{apex}:p1") }];
+    ok(&mut h);
+
+    let name = h.app.session.doc.features.last().unwrap().name.clone();
+    let sections = |h: &Harness| match &h.app.session.doc.find_feature(&name).unwrap().kind {
+        FeatureKind::Loft { sections, .. } => sections.clone(),
+        k => panic!("{k:?}"),
+    };
+    let stored = sections(&h);
+    assert_eq!(stored.len(), 2);
+    assert_eq!(stored[1].point.as_deref(), Some("p1"));
+
+    h.step(&json!({"call": "ui.editFeature", "params": {"feature": name}})).unwrap();
+    h.frames(8);
+    let d = h.app.dialog.as_ref().unwrap();
+    assert_eq!(
+        d.inputs[0].items,
+        vec![Sel::Profile { sketch: base, index: 0 }, Sel::SketchPoint { id: format!("{apex}:p1") },],
+        "editing a loft with an apex point preserves the sketch point section"
+    );
+    ok(&mut h);
+    assert_eq!(sections(&h), stored);
+}

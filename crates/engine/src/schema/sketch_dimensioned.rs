@@ -28,6 +28,7 @@ pub const CREATORS: &[&str] = &[
     "sketch.rectangle.center",
     "sketch.rectangle.three_point",
     "sketch.rectangle.rounded",
+    "sketch.rectangle.edge_center",
     "sketch.circle.center",
     "sketch.circle.two_point",
     "sketch.circle.three_point",
@@ -122,7 +123,7 @@ impl JsonSchema for DimensionValues {
         let length = generator.subschema_for::<LengthExpr>();
         let angle = generator.subschema_for::<AngleExpr>();
         json_schema!({
-            "description": "The sizes to place, each by its role: a number (in the design's unit) or an expression, or `name = expression`, which also defines the user parameter `name`. The roles a creator takes are its own: a line or midpoint line takes `length` and `angle`; a rectangle `width` and `height`; a circle `diameter` or `radius` (not both); an arc by centre `radius` and `sweep`; an ellipse `major_radius` and `minor_radius`; a centre-to-centre, overall or centre-point slot `length` and `width`; a centre arc slot `radius`, `sweep` and `width`; a three-point arc slot `width`; an inscribed or circumscribed polygon `radius`; an edge polygon `radius` or `length` (not both). A role the creator does not take is refused.",
+            "description": "The sizes to place, each by its role: a number (in the design's unit) or an expression, or `name = expression`, which also defines the user parameter `name`. The roles a creator takes are its own: a line or midpoint line takes `length` and `angle`; a rectangle `width` and `height`, an edge-centre rectangle `length` (its first edge) and `width`; a circle `diameter` or `radius` (not both); an arc by centre `radius` and `sweep`; an ellipse `major_radius` and `minor_radius`; a centre-to-centre, overall or centre-point slot `length` and `width`; a centre arc slot `radius`, `sweep` and `width`; a three-point arc slot `width`; an inscribed or circumscribed polygon `radius`; an edge polygon `radius` or `length` (not both). A role the creator does not take is refused.",
             "type": "object",
             "properties": {
                 "length": length,
@@ -208,7 +209,9 @@ fn draw_required(schema: &mut Schema) {
 #[schemars(transform = creator_reply)]
 pub struct DrawDimensionedResult {
     /// What the creator returned, as that command returns it (`curves`, `constraints`, `sketch`,
-    /// `created`, and for some creators `sides`, `corners`, `centre_arc` or `support_circle`).
+    /// `created`, and for some creators `sides`, `corners`, `centre_arc` or `support_circle`),
+    /// except `sketch`: it is the sketch's solve after the dimensions and any `locate` placement,
+    /// not the creator's own.
     #[serde(flatten)]
     pub drawn: Map<String, Value>,
     /// The `sketch.dimension` reply of each dimension placed, by role.
@@ -259,7 +262,7 @@ fn creator_reply(schema: &mut Schema) {
     let properties = json!({
         "curves": strings,
         "constraints": strings,
-        "sketch": {"type": "object", "description": "The sketch's solve: `{solved, dof}`."},
+        "sketch": {"type": "object", "description": "The sketch's solve after the dimensions and any `locate` placement: `{solved, dof}`."},
         "created": {"type": "object", "description": "What the creator added: `{points, curves, constraints, dimensions}`."},
         "sides": {"type": "object", "description": "A rectangle's sides {bottom, right, top, left}, line ids."},
         "corners": {"type": "object", "description": "A rectangle's corners {bottom_left, bottom_right, top_right, top_left}, point ids."},

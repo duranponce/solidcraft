@@ -3,11 +3,9 @@
 use crate::{Result, params::bad};
 use serde::Deserialize;
 use solidcore_record::Vec3;
-use solidcraft_render::{
-    ProductScene,
-    surface::{OpaqueSurface, srgb8_to_linear},
-    transmission::Transmission,
-};
+use solidcraft_geom::MeshGeom;
+use solidcraft_render::{ProductScene, transmission::Transmission};
+use solidcraft_viewport::surface::{OpaqueSurface, srgb8_to_linear};
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub(super) struct Raytrace {
@@ -182,7 +180,7 @@ mod tests {
         assert!(Arc::ptr_eq(&mesh, &scene.meshes[0].mesh));
         assert_eq!(scene.meshes[0].surface.unwrap().dielectric_ior(), 1.5);
         assert_eq!(saved, s.doc.to_json());
-        let reopened = crate::Session::new(solidcraft_doc::Document::from_json(&saved).unwrap());
+        let reopened = crate::Session::new(solidcraft_io::read_design(&solidcraft_io::write_design_container(&s.doc).unwrap()).unwrap());
         assert!(!crate::product_scene::extract(&reopened).unwrap().has_transmission());
         assert!(
             s.execute(
